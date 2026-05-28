@@ -1,0 +1,29 @@
+name: Fetch Notion News
+
+on:
+  workflow_dispatch: # これで手動実行（Run workflow）ができるようになります
+
+jobs:
+  fetch-and-save:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9' # またはお使いのPythonバージョン
+
+      - name: Install dependencies
+        run: pip install requests # 必要なライブラリがあれば追加
+
+      - name: Fetch data from Notion
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        run: |
+          # ここにNotionからデータを取得するPythonスクリプトを実行するコマンドを書きます。
+          # 例: python fetch_news.py
+          echo "Notionからデータを取得する処理をここに記述します"
+          # ※今はテストとして、echoコマンド（文字を表示するだけ）を入れています。
