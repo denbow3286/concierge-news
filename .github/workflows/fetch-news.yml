@@ -3,6 +3,11 @@ name: Fetch Notion News
 on:
   workflow_dispatch: # 手動で動かせるようにする設定
 
+# ↓↓↓ 今回追加した部分：ロボットにリポジトリへの書き込み（Push）権限を与えます ↓↓↓
+permissions:
+  contents: write
+# ↑↑↑ ここまで ↑↑↑
+
 jobs:
   fetch-and-save:
     runs-on: ubuntu-latest
