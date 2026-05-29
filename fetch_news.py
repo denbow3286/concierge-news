@@ -28,7 +28,6 @@ while has_more:
     
     if response.status_code != 200:
         print(f"エラーが発生しました: {response.status_code}")
-        print(response.text)
         break
 
     data = response.json()
@@ -39,37 +38,8 @@ while has_more:
 
 print(f"合計 {len(all_results)} 件のニュースを取得しました！")
 
-# サイトが読み込める形に整形する
-formatted_news = []
-for item in all_results:
-    props = item.get("properties", {})
-    
-    url_prop = props.get("url", {}).get("url")
-    news_url = url_prop if url_prop else "#"
-    
-    date_prop = props.get("date", {}).get("date", {})
-    news_date = date_prop.get("start") if date_prop else item.get("created_time", "")
-        
-    category_prop = props.get("category", {}).get("select", {})
-    news_category = category_prop.get("name") if category_prop else "すべて"
-    
-    title_arr = props.get("original_title", {}).get("title", [])
-    if not title_arr:
-        title_arr = props.get("名前", {}).get("title", [])
-    original_title = title_arr[0].get("plain_text", "") if title_arr else ""
-    
-    short_title_arr = props.get("short_title", {}).get("rich_text", [])
-    short_title = short_title_arr[0].get("plain_text", "") if short_title_arr else original_title
-
-    formatted_news.append({
-        "url": news_url,
-        "date": news_date,
-        "category": news_category,
-        "short_title": short_title,
-        "original_title": original_title
-    })
-
+# ⚠️今回は「整形せずに」そのまま全データを保存します
 with open("news.json", "w", encoding="utf-8") as f:
-    json.dump(formatted_news, f, ensure_ascii=False, indent=2)
+    json.dump(all_results, f, ensure_ascii=False, indent=2)
 
-print("無事に整形済みのnews.jsonを保存しました！")
+print("生データをnews.jsonに保存しました！")
