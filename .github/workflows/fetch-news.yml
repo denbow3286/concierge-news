@@ -6,10 +6,8 @@ on:
 permissions:
   contents: write
 
-# ↓↓↓ 今回追加した部分：最新のシステム（Node.js 24）で動かす設定 ↓↓↓
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-# ↑↑↑ ここまで ↑↑↑
 
 jobs:
   fetch-and-save:
@@ -37,4 +35,5 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add news.json
-          git diff --cached --quiet || (git commit -m "Update news.json from Notion" && git push)
+          git commit -m "Update news.json from Notion" || echo "No changes to commit"
+          git push
