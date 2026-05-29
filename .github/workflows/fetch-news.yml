@@ -1,11 +1,14 @@
 name: Fetch Notion News
 
 on:
-  workflow_dispatch: # 手動で動かせるようにする設定
+  workflow_dispatch:
 
-# ↓↓↓ 今回追加した部分：ロボットにリポジトリへの書き込み（Push）権限を与えます ↓↓↓
 permissions:
   contents: write
+
+# ↓↓↓ 今回追加した部分：最新のシステム（Node.js 24）で動かす設定 ↓↓↓
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 # ↑↑↑ ここまで ↑↑↑
 
 jobs:
@@ -27,7 +30,7 @@ jobs:
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-        run: python fetch_news.py # 先ほど作ったプログラムを実行します！
+        run: python fetch_news.py
 
       - name: Commit and Push changes
         run: |
