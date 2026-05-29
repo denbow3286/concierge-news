@@ -1,39 +1,87 @@
-name: Fetch Notion News
+import os
+import json
+import requests
+from datetime import datetime
 
-on:
-  workflow_dispatch:
+NOTION_TOKEN = os.environ["NOTION_TOKEN"]
+DATABASE_ID = os.environ["NOTION_DATABASE_ID"]
 
-permissions:
-  contents: write
+headers = {
+    "Authorization": f"Bearer {NOTION_TOKEN}",
+    "Content-Type": "application/json",
+    "Notion-Version": "2022-06-28"
+}
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
 
-jobs:
-  fetch-and-save:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
+all_results = []
+has_more = True
+next_cursor = None
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.9'
+print("Notionからデータを全件取得します...")
 
-      - name: Install dependencies
-        run: pip install requests
+while has_more:
+    payload = {}
+    if next_cursor:
+        payload["start_cursor"] = next_cursor
 
-      - name: Fetch data from Notion
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-        run: python fetch_news.py
+    response = requests.post(url, headers=headers, json=payload)
+    
+    if response.status_code != 200:
+        print(f"エラーが発生しました: {response.status_code}")
+        print(response.text)
+        break
 
-      - name: Commit and Push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add news.json
-          git commit -m "Update news.json from Notion" || echo "No changes to commit"
-          git push
+    data = response.json()
+    all_results.extend(data.get("results", []))
+    
+    has_more = data.get("has_more", False)
+    next_cursor = data.get("next_cursor", None)
+
+print(f"合計 {len(all_results)} 件のニュースを取得しました！")
+
+# サイトが読み込める形に整形する
+formatted_news = []
+for item in all_results:
+    props = item.get("properties", {})
+    
+    # URL
+    url_prop = props.get("url", {}).get("url")
+    news_url = url_prop if url_prop else "#"
+    
+    # Date (Created time 等のプロパティ名に合わせて調整。ここでは "date" というプロパティを想定)
+    date_prop = props.get("date", {}).get("date", {})
+    news_date = date_prop.get("start") if date_prop else ""
+    if not news_date:
+        # 万が一dateがない場合はNotionの作成日時を使う
+        news_date = item.get("created_time", "")
+        
+    # Category (Selectプロパティを想定)
+    category_prop = props.get("category", {}).get("select", {})
+    news_category = category_prop.get("name") if category_prop else "すべて"
+    
+    # Original Title (Titleプロパティを想定)
+    title_arr = props.get("original_title", {}).get("title", [])
+    if not title_arr:
+        # もしoriginal_titleという名前じゃなくて「名前」などの場合はこちら
+        title_arr = props.get("名前", {}).get("title", [])
+        
+    original_title = title_arr[0].get("plain_text", "") if title_arr else ""
+    
+    # Short Title (Textプロパティを想定)
+    short_title_arr = props.get("short_title", {}).get("rich_text", [])
+    short_title = short_title_arr[0].get("plain_text", "") if short_title_arr else original_title
+
+    formatted_news.append({
+        "url": news_url,
+        "date": news_date,
+        "category": news_category,
+        "short_title": short_title,
+        "original_title": original_title
+    })
+
+# 扱いやすい形にデータを整形して保存
+with open("news.json", "w", encoding="utf-8") as f:
+    json.dump(formatted_news, f, ensure_ascii=False, indent=2)
+
+print("無事に整形済みのnews.jsonを保存しました！")
