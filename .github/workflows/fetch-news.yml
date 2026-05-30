@@ -3,10 +3,11 @@ name: Fetch Notion News
 on:
   workflow_dispatch:
   schedule:
-    # 日本時間(JST)の AM 5:30 と PM 17:30 に実行
-    # ※GitHubのサーバーはUTC（協定世界時）なので、日本時間からマイナス9時間して設定します
-    - cron: '30 20 * * *'  # 日本時間の 朝 5:30
-    - cron: '30 8 * * *'   # 日本時間の 夕方 17:30
+    # 日本時間(JST)の AM 1:30 と PM 13:30 に実行
+    # ※MAKEの実行(1:07 / 13:07)完了を待ってから確実に動かします
+    # ※GitHub側はマイナス9時間のUTC(協定世界時)で指定します
+    - cron: '30 16 * * *'  # 日本時間の 午前 1:30
+    - cron: '30 4 * * *'   # 日本時間の 午後 13:30
 
 permissions:
   contents: write
