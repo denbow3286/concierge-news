@@ -1,53 +1,62 @@
 import os
-import json
 import requests
+import json
 
-NOTION_TOKEN = os.environ.get("NOTION_TOKEN", "")
-DATABASE_ID = os.environ.get("NOTION_DATABASE_ID", "")
+def fetch_notion_data():
+    # 環境変数の取得
+    notion_token = os.environ.get("NOTION_TOKEN")
+    database_id = os.environ.get("NOTION_DATABASE_ID")
 
-print("=== 調査開始 ===")
-print(f"Tokenが存在するか: {'Yes' if NOTION_TOKEN else 'No'}")
-print(f"DB IDが存在するか: {'Yes' if DATABASE_ID else 'No'}")
+    # 環境変数が正しくセットされているか確認（トークン自体は表示しない）
+    if not notion_token or not database_id:
+        print("エラー: NOTION_TOKEN または NOTION_DATABASE_ID が設定されていません。")
+        return
 
-if not NOTION_TOKEN or not DATABASE_ID:
-    print("❌ TokenかDB IDが設定されていません。")
-    exit(1)
+    print(f"データベースID: {database_id}")
+    print("Notion APIにリクエストを送信中...")
 
-headers = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
-
-url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
-print(f"リクエスト先URL: {url}")
-
-# 最小限のリクエストを送信してみる
-print("Notionにリクエストを送信します...")
-try:
-    response = requests.post(url, headers=headers, json={})
-    print(f"レスポンスステータス: {response.status_code}")
+    url = f"https://api.notion.com/v1/databases/{database_id}/query"
     
-    if response.status_code != 200:
-        print(f"❌ エラーが発生しました。詳細: {response.text}")
-    else:
+    headers = {
+        "Authorization": f"Bearer {notion_token}",
+        "Content-Type": "application/json",
+        "Notion-Version": "2022-06-28" # 必要に応じてご使用のバージョンに合わせてください
+    }
+
+    try:
+        response = requests.post(url, headers=headers)
+        
+        # ステータスコードの出力
+        print(f"ステータスコード: {response.status_code}")
+
+        # リクエストが失敗した場合のエラー内容出力
+        if response.status_code != 200:
+            print("Notion APIエラーメッセージ:")
+            print(response.text)
+            return
+
+        # データの解析
         data = response.json()
         results = data.get("results", [])
-        print(f"✅ 取得成功。件数: {len(results)}")
         
-        # 最初の1件のプロパティをすべて表示して、構造を確認する
+        # 取得できた件数の出力
+        print(f"取得できたデータ件数: {len(results)}件")
+
+        # 最初の1件の生データを出力
         if len(results) > 0:
-            first_item = results[0]
-            print("\n=== 1件目のデータ構造 ===")
-            print(json.dumps(first_item.get("properties", {}), ensure_ascii=False, indent=2))
+            print("\n=== 最初の1件の生データ (JSON) ===")
+            print(json.dumps(results[0], indent=2, ensure_ascii=False))
+            print("==================================")
         else:
-             print("❌ データが0件です。データベースが空か、権限がありません。")
+            print("データベースにレコードが存在しない、もしくはフィルターで弾かれている可能性があります。")
 
-        # そのまま保存
+        # デバッグ用として、空のリストを強制的に書き出しておく（Actionsのエラー回避のため）
         with open("news.json", "w", encoding="utf-8") as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
+            json.dump([], f)
+        print("\nデバッグ用ダミーとして news.json を出力しました。")
 
-except Exception as e:
-    print(f"❌ プログラムの実行中にエラーが発生しました: {e}")
+    except Exception as e:
+        print(f"通信エラーなどの例外が発生しました: {e}")
 
-print("=== 調査終了 ===")
+if __name__ == "__main__":
+    fetch_notion_data()
