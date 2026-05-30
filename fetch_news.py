@@ -120,7 +120,8 @@ def fetch_and_process_news():
         # ★Web公開用の JSON（著作権的に安全なデータのみを出力）
         # 本文（full_text）は内部検索用なのでここには絶対に入れない
         news_data.append({
-            "title": short_title if short_title else original_title,
+            "original_title": original_title,
+            "short_title": short_title,
             "date": date_str,
             "url": url,
             "category": category
