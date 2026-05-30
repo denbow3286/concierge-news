@@ -2,6 +2,9 @@ name: Fetch Notion News
 
 on:
   workflow_dispatch:
+  # 定期実行したい場合は下の2行のコメントアウトを外してください（例：毎日午前2時）
+  # schedule:
+  #   - cron: '0 17 * * *'
 
 permissions:
   contents: write
@@ -24,13 +27,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 google-genai
+          pip install requests beautifulsoup4
 
       - name: Fetch data from Notion
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python fetch_news.py
 
       - name: Commit and Push changes
