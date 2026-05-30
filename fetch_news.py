@@ -2,7 +2,7 @@ import os
 import json
 import requests
 from bs4 import BeautifulSoup
-import google.generativeai as genai
+from google import genai
 import time
 
 def fetch_and_process_news():
@@ -14,10 +14,8 @@ def fetch_and_process_news():
         print("エラー: 必要な環境変数が設定されていません。")
         return
 
-    # Gemini APIの初期設定
-    genai.configure(api_key=gemini_api_key)
-    # 処理が速くコストパフォーマンスの良いモデルを指定
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    # 最新のSDKでクライアントを初期化
+    client = genai.Client(api_key=gemini_api_key)
 
     headers = {
         "Authorization": f"Bearer {notion_token}",
@@ -25,7 +23,6 @@ def fetch_and_process_news():
         "Notion-Version": "2022-06-28"
     }
 
-    # ステータスが「公開」のものだけを取得するフィルター
     query_url = f"https://api.notion.com/v1/databases/{database_id}/query"
     payload = {
         "filter": {
@@ -52,7 +49,6 @@ def fetch_and_process_news():
         page_id = item["id"]
         props = item.get("properties", {})
 
-        # 各プロパティを安全に取得（存在しない・空の場合はデフォルト値を設定）
         try:
             title = props.get("名前", {}).get("title", [{}])[0].get("plain_text", "No Title")
         except IndexError:
@@ -73,34 +69,30 @@ def fetch_and_process_news():
         except IndexError:
             category = "未分類"
 
-        # summaryプロパティの確認
         try:
             summary = props.get("summary", {}).get("rich_text", [{}])[0].get("plain_text", "")
         except IndexError:
             summary = ""
 
-        # summaryが空、かつURLが存在する場合のみ、スクレイピングと要約を実行
         if not summary and url:
             print(f"要約生成中: {title}")
             try:
-                # スクレイピング
                 res = requests.get(url, timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
                 
-                # スクリプトやスタイルシートを除外してテキストを抽出
                 for script in soup(["script", "style"]):
                     script.extract()
-                text_content = soup.get_text(separator=' ', strip=True)
+                text_content = soup.get_text(separator=' ', strip=True)[:5000]
 
-                # 本文が長すぎる場合は先頭の一部のみをGeminiに渡す（トークン節約）
-                text_content = text_content[:5000]
-
-                # Geminiで要約
                 prompt = f"以下のニュース記事の本文を読み、重要なポイントを3〜4文程度の簡潔な日本語で要約してください。\n\n{text_content}"
-                ai_response = model.generate_content(prompt)
+                
+                # 最新のSDKによる呼び出し
+                ai_response = client.models.generate_content(
+                    model='gemini-2.0-flash',
+                    contents=prompt
+                )
                 summary = ai_response.text.strip()
 
-                # Notionへ書き戻し (PATCH)
                 patch_url = f"https://api.notion.com/v1/pages/{page_id}"
                 patch_payload = {
                     "properties": {
@@ -118,14 +110,12 @@ def fetch_and_process_news():
                 requests.patch(patch_url, headers=headers, json=patch_payload)
                 print(f" -> 要約完了＆Notion更新成功")
                 
-                # 連続リクエストによるエラーを防ぐため少し待機
                 time.sleep(2)
 
             except Exception as e:
                 print(f" -> {title} の要約処理中にエラーが発生しました: {e}")
                 summary = "要約の取得に失敗しました。"
 
-        # Webサイト用のJSON形式に整形
         news_data.append({
             "original_title": title,
             "date": date_str,
@@ -134,7 +124,6 @@ def fetch_and_process_news():
             "summary": summary
         })
 
-    # news.json に保存
     with open("news.json", "w", encoding="utf-8") as f:
         json.dump(news_data, f, ensure_ascii=False, indent=2)
     
