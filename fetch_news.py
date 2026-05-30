@@ -86,9 +86,9 @@ def fetch_and_process_news():
 
                 prompt = f"以下のニュース記事の本文を読み、重要なポイントを3〜4文程度の簡潔な日本語で要約してください。\n\n{text_content}"
                 
-                # 最新のSDKによる呼び出し
+                # ご共有いただいた最新の有効なモデルに変更
                 ai_response = client.models.generate_content(
-                    model='gemini-2.0-flash',
+                    model='gemini-3-flash',
                     contents=prompt
                 )
                 summary = ai_response.text.strip()
