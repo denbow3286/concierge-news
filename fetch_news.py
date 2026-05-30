@@ -2,20 +2,15 @@ import os
 import json
 import requests
 from bs4 import BeautifulSoup
-from google import genai
 import time
 
 def fetch_and_process_news():
     notion_token = os.environ.get("NOTION_TOKEN")
     database_id = os.environ.get("NOTION_DATABASE_ID")
-    gemini_api_key = os.environ.get("GEMINI_API_KEY")
 
-    if not all([notion_token, database_id, gemini_api_key]):
+    if not all([notion_token, database_id]):
         print("エラー: 必要な環境変数が設定されていません。")
         return
-
-    # 最新のSDKでクライアントを初期化
-    client = genai.Client(api_key=gemini_api_key)
 
     headers = {
         "Authorization": f"Bearer {notion_token}",
@@ -23,6 +18,7 @@ def fetch_and_process_news():
         "Notion-Version": "2022-06-28"
     }
 
+    # 公開記事を取得
     query_url = f"https://api.notion.com/v1/databases/{database_id}/query"
     payload = {
         "filter": {
@@ -49,10 +45,16 @@ def fetch_and_process_news():
         page_id = item["id"]
         props = item.get("properties", {})
 
+        # 各プロパティの取得
         try:
-            title = props.get("名前", {}).get("title", [{}])[0].get("plain_text", "No Title")
+            original_title = props.get("名前", {}).get("title", [{}])[0].get("plain_text", "No Title")
         except IndexError:
-            title = "No Title"
+            original_title = "No Title"
+
+        try:
+            short_title = props.get("short_title", {}).get("rich_text", [{}])[0].get("plain_text", "")
+        except IndexError:
+            short_title = original_title  # 万が一空の場合は元のタイトルをフォールバック
 
         try:
             date_str = props.get("日付", {}).get("date", {}).get("start", "")
@@ -70,64 +72,65 @@ def fetch_and_process_news():
             category = "未分類"
 
         try:
-            summary = props.get("summary", {}).get("rich_text", [{}])[0].get("plain_text", "")
+            full_text = props.get("full_text", {}).get("rich_text", [{}])[0].get("plain_text", "")
         except IndexError:
-            summary = ""
+            full_text = ""
 
-        if not summary and url:
-            print(f"要約生成中: {title}")
+        # full_textが空、かつURLが存在する場合のみスクレイピングを実行
+        # （XやYouTubeなどのエラーが出やすいサイトは除外設定も可能ですが、今回はそのままアタックして失敗したらスキップする安全設計です）
+        if not full_text and url:
+            print(f"本文取得中: {original_title}")
             try:
-                res = requests.get(url, timeout=10)
+                # 偽装ユーザーエージェントを設定し、スクレイピングの成功率を上げる
+                req_headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                res = requests.get(url, headers=req_headers, timeout=10)
                 soup = BeautifulSoup(res.text, 'html.parser')
                 
                 for script in soup(["script", "style"]):
                     script.extract()
-                text_content = soup.get_text(separator=' ', strip=True)[:5000]
-
-                prompt = f"以下のニュース記事の本文を読み、重要なポイントを3〜4文程度の簡潔な日本語で要約してください。\n\n{text_content}"
                 
-                # ★他のAIさんの指摘通り、正しいモデル名でシンプルに指定！
-                ai_response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt
-                )
-                summary = ai_response.text.strip()
+                # 本文を抽出（内部検索用として最大6000文字まで取得）
+                text_content = soup.get_text(separator=' ', strip=True)[:6000]
 
-                patch_url = f"https://api.notion.com/v1/pages/{page_id}"
-                patch_payload = {
-                    "properties": {
-                        "summary": {
-                            "rich_text": [
-                                {
-                                    "text": {
-                                        "content": summary
-                                    }
-                                }
-                            ]
+                if text_content:
+                    # Notionの仕様（1ブロック2000文字制限）に合わせてテキストを分割
+                    chunks = [text_content[i:i+2000] for i in range(0, len(text_content), 2000)]
+                    rich_text_array = [{"text": {"content": chunk}} for chunk in chunks]
+
+                    patch_url = f"https://api.notion.com/v1/pages/{page_id}"
+                    patch_payload = {
+                        "properties": {
+                            "full_text": {
+                                "rich_text": rich_text_array
+                            }
                         }
                     }
-                }
-                requests.patch(patch_url, headers=headers, json=patch_payload)
-                print(f" -> 要約完了＆Notion更新成功")
+                    requests.patch(patch_url, headers=headers, json=patch_payload)
+                    print(f" -> 本文取得＆Notion保存 成功")
+                else:
+                    print(f" -> 本文の抽出ができませんでした（動的サイト等の理由）")
                 
-                time.sleep(2)
+                time.sleep(1) # サーバーへの負荷軽減
 
             except Exception as e:
-                print(f" -> {title} の要約処理中にエラーが発生しました: {e}")
-                summary = "要約の取得に失敗しました。"
+                print(f" -> 取得エラー（タイムアウト・ブロック等）: {e}")
 
+        # ★Web公開用の JSON（著作権的に安全なデータのみを出力）
+        # 本文（full_text）は内部検索用なのでここには絶対に入れない
         news_data.append({
-            "original_title": title,
+            "title": short_title if short_title else original_title,
             "date": date_str,
             "url": url,
-            "category": category,
-            "summary": summary
+            "category": category
         })
 
+    # news.json に保存
     with open("news.json", "w", encoding="utf-8") as f:
         json.dump(news_data, f, ensure_ascii=False, indent=2)
     
-    print("\n処理が完了し、news.json を出力しました。")
+    print("\n処理が完了し、安全な news.json を出力しました。")
 
 if __name__ == "__main__":
     fetch_and_process_news()
