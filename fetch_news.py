@@ -26,7 +26,7 @@ def fetch_and_process_news():
     
     print("Notionから公開中の記事を取得しています...")
 
-    # ★変更点1：100件の壁を突破するページネーション（全件取得）ループ
+    # ★100件の壁を突破するページネーション（全件取得）ループ
     while has_more:
         payload = {
             "filter": {
@@ -109,4 +109,37 @@ def fetch_and_process_news():
                     chunks = [text_content[i:i+2000] for i in range(0, len(text_content), 2000)]
                     rich_text_array = [{"text": {"content": chunk}} for chunk in chunks]
 
-                    patch_url = f"https://api
+                    patch_url = f"https://api.notion.com/v1/pages/{page_id}"
+                    patch_payload = {
+                        "properties": {
+                            "full_text": {
+                                "rich_text": rich_text_array
+                            }
+                        }
+                    }
+                    requests.patch(patch_url, headers=headers, json=patch_payload)
+                    print(f" -> 本文取得＆Notion保存 成功")
+                else:
+                    print(f" -> 本文の抽出ができませんでした（動的サイト等の理由）")
+                
+                time.sleep(1)
+
+            except Exception as e:
+                print(f" -> 取得エラー（タイムアウト・ブロック等）: {e}")
+
+        # ★JSアプリが期待する形式（original_titleとshort_titleを分ける）
+        news_data.append({
+            "original_title": original_title,
+            "short_title": short_title,
+            "date": date_str,
+            "url": url,
+            "category": category
+        })
+
+    with open("news.json", "w", encoding="utf-8") as f:
+        json.dump(news_data, f, ensure_ascii=False, indent=2)
+    
+    print("\n処理が完了し、安全な news.json を出力しました。")
+
+if __name__ == "__main__":
+    fetch_and_process_news()
